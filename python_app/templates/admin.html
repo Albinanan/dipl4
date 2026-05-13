@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Админ-панель — Забери.РФ{% endblock %}
+{% block head_extra %}
+    <style>
+        table.data img.thumb { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; }
+    </style>
+{% endblock %}
+{% block content %}
+<div class="wrap">
+    <div class="card">
+        <strong>Администратор:</strong> {{ admin_user.name }}
+        {% if message %}<div class="ok">{{ message }}</div>{% endif %}
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    </div>
+
+    <div class="card" style="overflow-x:auto;">
+        <h3>Пользователи</h3>
+        <table class="data">
+            <tr><th>ID</th><th>Имя</th><th>Email</th><th>Роль</th><th>Блок</th><th>Действия</th></tr>
+            {% for u in users %}
+                <tr>
+                    <td>{{ u.id }}</td>
+                    <td>{{ u.name }}</td>
+                    <td>{{ u.email }}</td>
+                    <td>{{ u.role }}</td>
+                    <td>{% if u.is_blocked %}да{% else %}нет{% endif %}</td>
+                    <td>
+                        {% if u.id != admin_user.id %}
+                            <form method="post" style="display:inline;">
+                                <input type="hidden" name="action" value="toggle_block">
+                                <input type="hidden" name="id" value="{{ u.id }}">
+                                <button type="submit" class="btn">{% if u.is_blocked %}Разблокировать{% else %}Заблокировать{% endif %}</button>
+                            </form>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Удалить пользователя?');">
+                                <input type="hidden" name="action" value="delete_user">
+                                <input type="hidden" name="id" value="{{ u.id }}">
+                                <button type="submit" class="btn btn-danger">Удалить</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="card" style="overflow-x:auto;">
+        <h3>Объявления</h3>
+        <table class="data">
+            <tr><th>ID</th><th>Фото</th><th>Название</th><th>Категория</th><th>Адрес</th><th>Автор</th><th></th></tr>
+            {% for item in items %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td>
+                        {% if item.thumb %}
+                            <img class="thumb" src="{{ item.thumb }}" alt="">
+                        {% endif %}
+                    </td>
+                    <td>{{ item.title }}</td>
+                    <td>{{ categories[item.category].label if item.category in categories else item.category }}</td>
+                    <td>{{ item.address or '' }}</td>
+                    <td>{{ item.user_name }}</td>
+                    <td>
+                        <form method="post" onsubmit="return confirm('Удалить объявление?');">
+                            <input type="hidden" name="action" value="delete_item">
+                            <input type="hidden" name="id" value="{{ item.id }}">
+                            <button type="submit" class="btn btn-danger">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+{% endblock %}

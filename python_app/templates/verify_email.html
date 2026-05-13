@@ -1,0 +1,14 @@
+{% extends "base_auth.html" %}
+{% block title %}Подтверждение email — Забери.РФ{% endblock %}
+{% block content %}
+<div class="card auth-card">
+    {% if ok %}
+        <h2>Email подтверждён</h2>
+        <p>Можно публиковать объявления и откликаться.</p>
+    {% else %}
+        <h2>Ссылка недействительна</h2>
+        <p class="muted">Запросите новую ссылку в личном кабинете → Настройки.</p>
+    {% endif %}
+    <p><a class="btn btn-primary" href="{{ url_for('profile', tab='settings') }}">В кабинет</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Редактирование — Забери.РФ{% endblock %}
+{% block content %}
+<div class="wrap">
+    <div class="card" style="max-width:640px;">
+        <h2>Редактировать объявление</h2>
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="save">
+            <label>Название</label>
+            <input type="text" name="title" required value="{{ item.title }}" style="width:100%;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid var(--border);">
+            <label>Описание</label>
+            <textarea name="description" rows="4" style="width:100%;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid var(--border);">{{ item.description or '' }}</textarea>
+            <label>Категория</label>
+            <select name="category" id="category" required style="width:100%;padding:10px;margin:6px 0 12px;">
+                {% for key, cat in categories.items() %}
+                    <option value="{{ key }}" {% if item.category == key %}selected{% endif %}>{{ cat.label }}</option>
+                {% endfor %}
+            </select>
+            <label>Подкатегория</label>
+            <select name="subcategory" id="subcategory" required style="width:100%;padding:10px;margin:6px 0 12px;"></select>
+            <label>Адрес</label>
+            <input type="text" name="address" required value="{{ item.address or '' }}" style="width:100%;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid var(--border);">
+
+            <p class="small muted">До 5 фотографий. Отметьте «убрать», чтобы удалить.</p>
+            {% for im in db_images %}
+                <label style="display:block;margin:8px 0;">
+                    <img src="{{ im.path }}" alt="" style="max-height:80px;vertical-align:middle;margin-right:8px;">
+                    <input type="checkbox" name="remove_image" value="{{ im.id }}"> убрать
+                </label>
+            {% endfor %}
+            {% if legacy_standalone %}
+                <label style="display:block;margin:8px 0;">
+                    <img src="{{ legacy_path }}" alt="" style="max-height:80px;vertical-align:middle;margin-right:8px;">
+                    <input type="checkbox" name="remove_legacy" value="1"> убрать старое фото
+                </label>
+            {% endif %}
+            <input type="file" name="photos" accept="image/*" multiple>
+
+            <button type="submit" class="btn btn-primary btn-lg" style="margin-top:12px;">Сохранить</button>
+        </form>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        {% if success %}<div class="ok">{{ success }}</div>{% endif %}
+
+        <form method="post" style="margin-top:24px;" onsubmit="return confirm('Удалить объявление безвозвратно?');">
+            <input type="hidden" name="action" value="delete">
+            <button type="submit" class="btn btn-danger">Удалить объявление</button>
+        </form>
+        <p><a href="{{ url_for('item_page', iid=item_id) }}">← К объявлению</a></p>
+    </div>
+</div>
+<script>
+    const categories = {{ categories | tojson }};
+    const categoryEl = document.getElementById('category');
+    const subcategoryEl = document.getElementById('subcategory');
+    let currentSub = {{ item.subcategory | tojson }};
+
+    function refill() {
+        const key = categoryEl.value;
+        const subs = categories[key].subs;
+        subcategoryEl.innerHTML = '';
+        Object.entries(subs).forEach(([value, label]) => {
+            const o = document.createElement('option');
+            o.value = value;
+            o.textContent = label;
+            if (value === currentSub) o.selected = true;
+            subcategoryEl.appendChild(o);
+        });
+        currentSub = subcategoryEl.value;
+    }
+    categoryEl.addEventListener('change', () => { currentSub = ''; refill(); });
+    refill();
+</script>
+{% endblock %}

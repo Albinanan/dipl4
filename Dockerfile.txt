@@ -1,0 +1,10 @@
+FROM php:8.2-apache
+
+# Копируем ВСЕ файлы из корня проекта в корень веб-сервера
+COPY . /var/www/html/
+
+# Даём права на выполнение
+RUN chmod -R 755 /var/www/html
+
+# Включаем mod_rewrite (полезно для ЧПУ)
+RUN a2enmod rewrite

@@ -1,0 +1,18 @@
+<header class="site-header">
+    <a class="brand" href="{{ url_for('index') }}">Забери.РФ</a>
+    <nav>
+        <a href="{{ url_for('index') }}">Главная</a>
+        <a href="{{ url_for('map_page') }}">Карта</a>
+        {% if user %}
+            <a href="{{ url_for('profile') }}">Личный кабинет</a>
+            {% if (user.role or 'user') == 'admin' %}
+                <a href="{{ url_for('admin') }}">Админ</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}">Выход</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">Вход</a>
+            <a href="{{ url_for('register') }}">Регистрация</a>
+        {% endif %}
+    </nav>
+    <span class="spacer"></span>
+</header>

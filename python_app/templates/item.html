@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }} — Забери.РФ{% endblock %}
+{% block head_extra %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+{% endblock %}
+{% block content %}
+<div class="wrap">
+    {% if request.args.get('applied') %}<div class="ok card">Отклик отправлен.</div>{% endif %}
+
+    <div class="item-card-lg" style="max-width: 900px;">
+        {% if images %}
+            <img class="hero" src="{{ images[0] }}" alt="{{ item.title }}">
+        {% else %}
+            <img class="hero" src="https://placehold.co/900x400?text=Нет+фото" alt="">
+        {% endif %}
+        <div class="body">
+            <h1 style="margin:0 0 8px;">{{ item.title }}</h1>
+            <p class="muted small">
+                {{ categories[item.category].label if item.category in categories else item.category }} ·
+                {{ categories[item.category].subs[item.subcategory] if item.category in categories and item.subcategory in categories[item.category].subs else item.subcategory }}
+                {% if (item.status or '') == 'transferred' %}
+                    <span class="ok"> · Передано</span>
+                {% endif %}
+            </p>
+            {% if images|length > 1 %}
+                <div class="gallery">
+                    {% for im in images[1:] %}
+                        <img src="{{ im }}" alt="">
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <p style="white-space:pre-wrap;">{{ item.description or '' }}</p>
+            <p><strong>Адрес:</strong> {{ item.address or '' }}</p>
+
+            <div id="map-item"></div>
+
+            <div class="donor-row">
+                {% set da = item.donor_avatar or '' %}
+                {% if da %}
+                    <img class="avatar" src="{{ da }}" alt="">
+                {% else %}
+                    <img class="avatar" src="https://placehold.co/120x120?text=?" alt="">
+                {% endif %}
+                <div>
+                    <div class="small muted">Даритель</div>
+                    <strong>{{ item.donor_name }}</strong>
+                    <div class="small muted">Контакты не показываются — общайтесь в чате на сайте.</div>
+                </div>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;">
+                {% if user and not is_owner and (item.status or '') == 'active' %}
+                    {% if my_app %}
+                        <span class="btn" style="opacity:0.85;cursor:default;">Вы откликнулись ({{ my_app.status }})</span>
+                    {% else %}
+                        <form method="post" style="flex:1;min-width:240px;">
+                            <input type="hidden" name="action" value="apply">
+                            <input type="text" name="message" placeholder="Короткое сообщение дарителю" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border);">
+                            <button type="submit" class="btn btn-accent btn-lg" style="width:100%;">Хочу забрать</button>
+                        </form>
+                    {% endif %}
+                    <form method="post">
+                        <input type="hidden" name="action" value="favorite">
+                        <button type="submit" class="btn btn-lg">{% if fav %}★ В избранном{% else %}☆ В избранное{% endif %}</button>
+                    </form>
+                {% elif not user and (item.status or '') == 'active' %}
+                    <a class="btn btn-accent btn-lg" href="{{ url_for('login') }}">Войти, чтобы откликнуться</a>
+                {% endif %}
+
+                {% if is_owner %}
+                    <a class="btn btn-primary btn-lg" href="{{ url_for('item_edit', iid=item_id) }}">Редактировать</a>
+                {% endif %}
+            </div>
+
+            {% if is_owner and (item.status or '') == 'active' and applications %}
+                <h3 style="margin-top:24px;">Отклики</h3>
+                <table class="data">
+                    <tr><th>Пользователь</th><th>Сообщение</th><th>Статус</th><th></th></tr>
+                    {% for a in applications %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('user_public', uid=a.user_id) }}">{{ a.applicant_name }}</a>
+                            </td>
+                            <td style="white-space:pre-wrap;">{{ a.message }}</td>
+                            <td>{{ a.status }}</td>
+                            <td>
+                                {% if a.status == 'pending' %}
+                                    <form method="post" style="display:inline;">
+                                        <input type="hidden" name="action" value="accept">
+                                        <input type="hidden" name="user_id" value="{{ a.user_id }}">
+                                        <button type="submit" class="btn btn-primary">Принять</button>
+                                    </form>
+                                    <form method="post" style="display:inline;">
+                                        <input type="hidden" name="action" value="reject">
+                                        <input type="hidden" name="user_id" value="{{ a.user_id }}">
+                                        <button type="submit" class="btn">Отклонить</button>
+                                    </form>
+                                {% endif %}
+                                <a class="btn" href="{{ url_for('item_page', iid=item_id, chat_with=a.user_id) }}">Чат</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </table>
+                {% if first_accepted %}
+                    <form method="post" style="margin-top:12px;" onsubmit="return confirm('Отметить передачу этому пользователю?');">
+                        <input type="hidden" name="action" value="transfer">
+                        <input type="hidden" name="user_id" value="{{ first_accepted.user_id }}">
+                        <button type="submit" class="btn btn-accent btn-lg">Вещь передана</button>
+                    </form>
+                {% endif %}
+            {% endif %}
+
+            {% if show_chat %}
+                <h3 style="margin-top:24px;">Сообщения</h3>
+                <p class="muted small">Переписка внутри сайта — как в мессенджере. Личные контакты не передаются.</p>
+                <div class="chat-messenger" id="chatMessenger" data-item="{{ item_id }}" data-peer="{{ peer_for_chat }}">
+                    <div id="chat" class="chat-thread" role="log" aria-live="polite"></div>
+                    <form id="chatForm" class="chat-composer">
+                        <input type="text" id="chatBody" class="chat-input" placeholder="Сообщение…" maxlength="2000" autocomplete="off">
+                        <button type="submit" class="btn btn-primary chat-send">Отправить</button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+    const lat = {{ item.latitude | float }};
+    const lon = {{ item.longitude | float }};
+    const map = L.map('map-item', { attributionControl: false }).setView([lat, lon], 14);
+    L.control.attribution({ prefix: false }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+    L.marker([lat, lon]).addTo(map);
+
+    const root = document.getElementById('chatMessenger');
+    const chatEl = document.getElementById('chat');
+    const apiChat = {{ url_for('api_chat') | tojson }};
+    const myAvatar = {{ (user.avatar_path if user else '') | tojson }};
+    if (root && chatEl) {
+        const itemId = root.dataset.item;
+        const peerId = root.dataset.peer;
+        function formatTime(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+        let lastSig = null;
+        async function loadChat() {
+            const res = await fetch(apiChat + '?item_id=' + encodeURIComponent(itemId) + '&peer_id=' + encodeURIComponent(peerId), {
+                credentials: 'same-origin',
+            });
+            let data;
+            try {
+                data = await res.json();
+            } catch (e) {
+                data = {};
+            }
+            if (!res.ok || data.error) {
+                chatEl.innerHTML = '<div class="chat-error">Чат недоступен (войдите заново или обновите страницу).</div>';
+                lastSig = null;
+                return;
+            }
+            const msgs = data.messages || [];
+            const sig = msgs.map(m => String(m.id) + ':' + m.body).join('|');
+            if (lastSig !== null && sig === lastSig) return;
+            lastSig = sig;
+            chatEl.innerHTML = '';
+            if (msgs.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'chat-empty';
+                empty.textContent = 'Пока нет сообщений — напишите первым.';
+                chatEl.appendChild(empty);
+            }
+            msgs.forEach(m => {
+                const row = document.createElement('div');
+                row.className = 'chat-row' + (m.mine ? ' chat-row--mine' : '');
+                const bubble = document.createElement('div');
+                bubble.className = 'chat-bubble' + (m.mine ? ' chat-bubble--mine' : '');
+                const name = document.createElement('div');
+                name.className = 'chat-sender-name';
+                name.textContent = m.mine ? 'Вы' : (m.sender_name || 'Собеседник');
+                const text = document.createElement('div');
+                text.className = 'chat-bubble-text';
+                text.textContent = m.body;
+                const time = document.createElement('div');
+                time.className = 'chat-bubble-time';
+                time.textContent = formatTime(m.created_at);
+                bubble.appendChild(name);
+                bubble.appendChild(text);
+                bubble.appendChild(time);
+                if (!m.mine) {
+                    const av = document.createElement('div');
+                    av.className = 'chat-avatar-wrap';
+                    const img = document.createElement('img');
+                    img.className = 'chat-avatar';
+                    img.alt = '';
+                    img.src = m.sender_avatar || 'https://placehold.co/80x80?text=?';
+                    av.appendChild(img);
+                    row.appendChild(av);
+                }
+                row.appendChild(bubble);
+                if (m.mine) {
+                    const av = document.createElement('div');
+                    av.className = 'chat-avatar-wrap chat-avatar-wrap--mine';
+                    const img = document.createElement('img');
+                    img.className = 'chat-avatar';
+                    img.alt = '';
+                    img.src = myAvatar || 'https://placehold.co/80x80?text=%D0%AF';
+                    av.appendChild(img);
+                    row.appendChild(av);
+                }
+                chatEl.appendChild(row);
+            });
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+        loadChat();
+        setInterval(loadChat, 4000);
+        document.getElementById('chatForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('chatBody');
+            const body = input.value.trim();
+            if (!body) return;
+            const fd = new FormData();
+            fd.append('item_id', itemId);
+            fd.append('peer_id', peerId);
+            fd.append('body', body);
+            const sendRes = await fetch(apiChat, { method: 'POST', body: fd, credentials: 'same-origin' });
+            input.value = '';
+            if (sendRes.ok) {
+                lastSig = null;
+                loadChat();
+            } else {
+                alert('Не удалось отправить сообщение.');
+            }
+        });
+    }
+</script>
+{% endblock %}

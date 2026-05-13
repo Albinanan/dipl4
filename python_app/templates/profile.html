@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Личный кабинет — Забери.РФ{% endblock %}
+{% block content %}
+<div class="wrap">
+    <div class="card" style="margin-bottom:16px;">
+        <strong>{{ user.name }}</strong>
+        <span class="muted small"> · {{ user.email }}</span>
+        {% if (user.role or '') == 'admin' %} — <strong>Администратор</strong>{% endif %}
+    </div>
+
+    <div class="tabs">
+        <a class="{{ 'active' if tab == 'listings' else '' }}" href="{{ url_for('profile', tab='listings') }}">Мои объявления</a>
+        <a class="{{ 'active' if tab == 'add' else '' }}" href="{{ url_for('profile', tab='add') }}">Добавить объявление</a>
+        <a class="{{ 'active' if tab == 'responses' else '' }}" href="{{ url_for('profile', tab='responses') }}">Мои отклики</a>
+        <a class="{{ 'active' if tab == 'favorites' else '' }}" href="{{ url_for('profile', tab='favorites') }}">Избранное</a>
+        <a class="{{ 'active' if tab == 'settings' else '' }}" href="{{ url_for('profile', tab='settings') }}">Настройки</a>
+    </div>
+
+    {% if request.args.get('created') %}<div class="ok card">Объявление опубликовано.</div>{% endif %}
+    {% if request.args.get('deleted') %}<div class="ok card">Объявление удалено.</div>{% endif %}
+    {% if request.args.get('registered') %}<div class="ok card">Аккаунт создан. Подтвердите email в разделе «Настройки».</div>{% endif %}
+
+    {% if tab == 'listings' %}
+        <div class="grid">
+            {% if not my_items %}
+                <p>Объявлений пока нет. <a href="{{ url_for('profile', tab='add') }}">Добавить</a></p>
+            {% endif %}
+            {% for item in my_items %}
+                {% set imgs = item.images or [] %}
+                <article class="item-card-lg">
+                    {% if imgs %}
+                        <img class="hero" src="{{ imgs[0] }}" alt="">
+                    {% else %}
+                        <img class="hero" src="https://placehold.co/600x400?text=Нет+фото" alt="">
+                    {% endif %}
+                    <div class="body">
+                        <strong>{{ item.title }}</strong>
+                        <p class="small muted">{{ categories[item.category].label if item.category in categories else '' }} · {{ item.status or '' }}</p>
+                        <a class="btn btn-primary" href="{{ url_for('item_page', iid=item.id) }}">Открыть</a>
+                        <a class="btn" href="{{ url_for('item_edit', iid=item.id) }}">Редактировать</a>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if tab == 'add' %}
+        <div class="card" style="max-width:640px;">
+            <h3>Новое объявление</h3>
+            <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="form_tab" value="add_item">
+                <input type="text" name="title" placeholder="Название" required style="width:100%;padding:10px;margin:8px 0;border-radius:8px;border:1px solid var(--border);">
+                <textarea name="description" rows="4" placeholder="Описание" style="width:100%;padding:10px;margin:8px 0;border-radius:8px;border:1px solid var(--border);"></textarea>
+                <select name="category" id="category" required style="width:100%;padding:10px;margin:8px 0;">
+                    {% for key, cat in categories.items() %}
+                        <option value="{{ key }}">{{ cat.label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="subcategory" id="subcategory" required style="width:100%;padding:10px;margin:8px 0;"></select>
+                <input type="text" name="address" placeholder="Адрес в Новосибирске" required style="width:100%;padding:10px;margin:8px 0;border-radius:8px;border:1px solid var(--border);">
+                <label class="small muted">До 5 фотографий (JPG, PNG, WEBP)</label>
+                <input type="file" name="photos" accept="image/*" multiple>
+                <button type="submit" class="btn btn-accent btn-lg" style="margin-top:12px;">Опубликовать</button>
+            </form>
+            {% if error and post_tab == 'add_item' %}<div class="error">{{ error }}</div>{% endif %}
+        </div>
+        <script>
+            const categories = {{ categories | tojson }};
+            const categoryEl = document.getElementById('category');
+            const subcategoryEl = document.getElementById('subcategory');
+            function us() {
+                const subs = categories[categoryEl.value].subs;
+                subcategoryEl.innerHTML = '';
+                Object.entries(subs).forEach(([v, l]) => {
+                    const o = document.createElement('option');
+                    o.value = v;
+                    o.textContent = l;
+                    subcategoryEl.appendChild(o);
+                });
+            }
+            categoryEl.addEventListener('change', us);
+            us();
+        </script>
+    {% endif %}
+
+    {% if tab == 'responses' %}
+        <div class="card">
+            <table class="data">
+                <tr><th>Объявление</th><th>Сообщение</th><th>Статус</th></tr>
+                {% if not responses %}
+                    <tr><td colspan="3" class="muted">Откликов пока нет.</td></tr>
+                {% endif %}
+                {% for r in responses %}
+                    <tr>
+                        <td><a href="{{ url_for('item_page', iid=r.item_id) }}">{{ r.item_title }}</a><br><small class="muted">{{ r.item_status }}</small></td>
+                        <td style="white-space:pre-wrap;">{{ r.message }}</td>
+                        <td>{{ r.status }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    {% endif %}
+
+    {% if tab == 'favorites' %}
+        <div class="grid">
+            {% if not favorites %}
+                <p class="muted">Пока пусто. Добавляйте объявления в избранное на странице вещи.</p>
+            {% endif %}
+            {% for item in favorites %}
+                {% set imgs = item.images or [] %}
+                <article class="item-card-lg">
+                    <img class="hero" src="{{ imgs[0] if imgs else 'https://placehold.co/600x400?text=Нет+фото' }}" alt="">
+                    <div class="body">
+                        <strong>{{ item.title }}</strong>
+                        <p><a class="btn btn-primary" href="{{ url_for('item_page', iid=item.id) }}">Открыть</a></p>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if tab == 'settings' %}
+        <div class="card" style="max-width:520px;">
+            <h3>Настройки профиля</h3>
+            <p class="small muted">Контакты ниже видите только вы. Другие пользователи их не видят.</p>
+            <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="form_tab" value="settings">
+                <label>Имя</label>
+                <input type="text" name="name" value="{{ user.name }}" required style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;border:1px solid var(--border);">
+                <label>Телефон аккаунта (для входа/верификации, цифры)</label>
+                <input type="text" name="phone" value="{{ user.phone or '' }}" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;border:1px solid var(--border);">
+                <label>Контактный телефон (приватный)</label>
+                <input type="text" name="contact_phone" value="{{ user.contact_phone or '' }}" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;border:1px solid var(--border);">
+                <label>Контактный email (приватный)</label>
+                <input type="email" name="contact_email" value="{{ user.contact_email or '' }}" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;border:1px solid var(--border);">
+                <label>Доп. контакт (Telegram и т.д., приватно)</label>
+                <input type="text" name="contact_note" value="{{ user.contact_note or '' }}" style="width:100%;padding:10px;margin:4px 0 12px;border-radius:8px;border:1px solid var(--border);">
+                <label>Аватар</label>
+                <input type="file" name="avatar" accept="image/*" style="margin:4px 0 12px;">
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </form>
+
+            <hr style="border:0;border-top:1px solid var(--border);margin:20px 0;">
+            <p>Email: {% if user.email_verified %}<span class="ok">подтверждён</span>{% else %}<span class="error">не подтверждён</span>{% endif %}</p>
+            {% if not user.email_verified %}
+                <form method="post"><input type="hidden" name="form_tab" value="resend_email"><button type="submit" class="btn">Получить ссылку подтверждения</button></form>
+            {% endif %}
+
+            <p style="margin-top:16px;">Телефон: {% if user.phone_verified %}<span class="ok">подтверждён</span>{% else %}<span class="muted">не подтверждён</span>{% endif %}</p>
+            <form method="post" style="margin-bottom:8px;"><input type="hidden" name="form_tab" value="send_phone_otp"><button type="submit" class="btn">Выслать код (демо)</button></form>
+            <form method="post">
+                <input type="hidden" name="form_tab" value="verify_phone">
+                <input type="text" name="phone_code" placeholder="Код из SMS (демо)" style="padding:10px;border-radius:8px;border:1px solid var(--border);width:200px;">
+                <button type="submit" class="btn btn-primary">Подтвердить телефон</button>
+            </form>
+
+            <p style="margin-top:20px;"><a href="{{ url_for('index') }}">На главную</a></p>
+        </div>
+        {% if error and post_tab in ['settings', 'send_phone_otp', 'verify_phone', 'resend_email'] %}<div class="error card">{{ error }}</div>{% endif %}
+        {% if success %}<div class="ok card">{{ success }}</div>{% endif %}
+    {% endif %}
+</div>
+{% endblock %}

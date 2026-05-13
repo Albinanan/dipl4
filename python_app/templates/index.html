@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Забери.РФ — Новосибирск{% endblock %}
+{% block head_extra %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <style>
+        #map-home { height: 280px; }
+        @media (min-width: 900px) { #map-home { height: 320px; } }
+    </style>
+{% endblock %}
+{% block content %}
+<div class="wrap">
+    <section class="card" style="margin-bottom:20px;">
+        <h1 style="margin-top:0;font-size:1.35rem;">Отдаём вещи соседям — бесплатно и безопасно</h1>
+        <p class="muted" style="margin-bottom:12px;">Поиск по названию и описанию, фильтры по категориям и карта.</p>
+        <form class="search-row" method="get" action="{{ url_for('index') }}">
+            <input type="search" name="q" value="{{ q }}" placeholder="Например: детские ботинки, диван…" aria-label="Поиск">
+            <select name="category" id="home_cat" style="padding:12px;border-radius:10px;border:1px solid var(--border);">
+                <option value="">Все категории</option>
+                {% for key, c in categories.items() %}
+                    <option value="{{ key }}" {% if cat == key %}selected{% endif %}>{{ c.label }}</option>
+                {% endfor %}
+            </select>
+            <select name="subcategory" id="home_sub" style="padding:12px;border-radius:10px;border:1px solid var(--border);min-width:160px;">
+                <option value="">Подкатегория</option>
+            </select>
+            <button type="submit" class="btn btn-primary btn-lg">Найти</button>
+        </form>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+            <a class="btn btn-accent btn-lg" href="{{ url_for('profile', tab='add') }}">Добавить объявление</a>
+            <a class="btn btn-lg" href="{{ url_for('map_page') }}">Открыть карту</a>
+        </div>
+    </section>
+
+    <h2 class="h-section" style="font-size:1.1rem;margin:8px 0 12px;">Популярные категории</h2>
+    <div class="cat-pills">
+        {% for key, c in categories.items() %}
+            <a href="{{ url_for('index', category=key) }}">{{ c.label }}</a>
+        {% endfor %}
+    </div>
+
+    <h2 style="font-size:1.1rem;margin:8px 0 12px;">Последние объявления</h2>
+    <div class="grid">
+        {% if not list_items %}
+            <p class="muted">Ничего не найдено. Попробуйте изменить запрос или <a href="{{ url_for('index') }}">сбросить фильтры</a>.</p>
+        {% endif %}
+        {% for item in list_items %}
+            {% set imgs = item.images or [] %}
+            <article class="item-card-lg">
+                <a href="{{ url_for('item_page', iid=item.id) }}">
+                    <img class="hero" src="{{ imgs[0] if imgs else 'https://placehold.co/600x400?text=Нет+фото' }}" alt="">
+                </a>
+                <div class="body">
+                    <strong><a href="{{ url_for('item_page', iid=item.id) }}">{{ item.title }}</a></strong>
+                    <p class="small muted">{{ categories[item.category].label if item.category in categories else '' }}</p>
+                    <a class="btn btn-accent btn-lg" style="width:100%;margin-top:8px;" href="{{ url_for('item_page', iid=item.id) }}">Хочу забрать</a>
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+
+    <h2 style="font-size:1.1rem;margin:24px 0 12px;">На карте</h2>
+    <div id="map-home"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+    const categories = {{ categories | tojson }};
+    const homeCat = document.getElementById('home_cat');
+    const homeSub = document.getElementById('home_sub');
+    const selectedCat = {{ cat | tojson }};
+    const selectedSub = {{ sub | tojson }};
+
+    function refillHomeSub() {
+        const key = homeCat.value;
+        homeSub.innerHTML = '<option value="">Подкатегория</option>';
+        if (!key || !categories[key]) return;
+        Object.entries(categories[key].subs).forEach(([value, label]) => {
+            const o = document.createElement('option');
+            o.value = value;
+            o.textContent = label;
+            if (value === selectedSub) o.selected = true;
+            homeSub.appendChild(o);
+        });
+    }
+    homeCat.addEventListener('change', () => { refillHomeSub(); });
+    refillHomeSub();
+
+    const map = L.map('map-home', { attributionControl: false }).setView([55.0302, 82.9204], 11);
+    L.control.attribution({ prefix: false }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }).addTo(map);
+    const layer = L.layerGroup().addTo(map);
+    const itemUrlTmpl = "{{ url_for('item_page', iid=999999999) }}";
+    const itemUrl = (id) => itemUrlTmpl.replace('999999999', String(id));
+    const params = new URLSearchParams(window.location.search);
+    fetch('{{ url_for("api_items") }}?' + params.toString()).then(r => r.json()).then(data => {
+        data.items.forEach(item => {
+            L.marker([item.latitude, item.longitude]).bindPopup(`<a href="${itemUrl(item.id)}"><b>${item.title}</b></a>`).addTo(layer);
+        });
+    });
+</script>
+{% endblock %}
